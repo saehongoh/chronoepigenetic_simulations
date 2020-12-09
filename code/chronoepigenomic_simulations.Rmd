@@ -1,0 +1,430 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+## Setup
+```{r}
+require(ggplot2)
+require(dplyr)
+require(data.table)
+require(reshape2)
+require(png)
+coef2wave <- function(amp,acro,int=0,zts=0:24,per=24){return(amp/2*cos(zts/24*2*pi-acro/24*2*pi)+int)}
+
+
+```
+
+## Idiosyncratic desynchronosis
+
+### Figure 5a
+```{r fig.height= 4, fig.width=3}
+
+res_list <- vector('list', 50)
+phase_shift = 2
+
+for(i in 1:length(res_list)){
+  hypothetical_amplitude <- 5
+  hypo_amp <- sample(seq(hypothetical_amplitude/2, hypothetical_amplitude, hypothetical_amplitude/10),1)
+  # hypo_amp <- 5
+  tmp2 <- data.frame(rep=i, zt = 0:24, 
+                     healthy = coef2wave(amp=hypo_amp, int= 2.5,
+                                                 acro=sample(c(seq(21, 24, 0.5), seq(0, 3, 0.5)), 1)), 
+                     affected = coef2wave(amp=hypo_amp, int= 2.5,
+                                                  acro=sample(c(seq(21-phase_shift[1], 24, 0.5), seq(0, 3+phase_shift[1], 0.5)), 1))) 
+  res_list[[i]] <- tmp2
+  }
+
+res <- do.call(rbind, res_list)
+res <- res %>%
+  melt(., id.var = c("rep","zt")) 
+
+graph1 <- res %>%
+  ggplot(aes(x=zt, y=value, col=as.factor(rep))) +
+  theme_bw() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), legend.position = "none") +
+  ylab("normalized\ncytosine modification\ndensity (%)") + xlab("time of day") +
+  scale_x_continuous(breaks=seq(0, 24, 4), labels = c("12AM","4AM","8AM","12PM","4PM","8PM","12AM")) +
+  geom_rect(aes(xmin=9,xmax=17,ymin=-Inf,ymax=Inf), alpha=0.1, fill="grey90", col="white") +
+  geom_smooth(method="lm", size=0.25, formula= y ~ sin(x/24*2*pi) + cos(x/24*2*pi), se=FALSE) +
+  facet_wrap(~variable, nrow=2) + scale_color_manual(values=c(rep("black", 50))) 
+  # facet_wrap(~variable) + scale_color_manual(values=c(viridis::cividis(20))) 
+
+graph1
+
+### Save output
+# saveRDS(res, "output/chrono_simulation.RDS")
+
+### Load published data
+ res <- readRDS("input/chrono_simulation.RDS")
+
+```
+
+### Figure 5b: sampling simulations
+```{r fig.height= 4, fig.width=3}
+
+sample_points <- res %>%
+  filter( zt > 9, zt < 17 ) %>%
+  dcast(rep + zt ~ variable, value.var = "value", sum) %>%
+  group_by(rep) %>%
+  sample_n(., 1) %>%
+  melt(., id.var = c("rep","zt")) 
+
+graph1 +
+  geom_point(data= sample_points, aes(x=zt, y=value), col="darkred", alpha=0.75)
+
+### Save output
+# saveRDS(sample_points, "output/chrono_samplepoints.RDS")
+
+### Load published data
+sample_points <- readRDS("input/chrono_samplepoints.RDS")
+
+```
+
+### Figure 5c: sampled boxplot
+```{r fig.height= 4, fig.width=3}
+
+sample_points %>%
+  ggplot(aes(x=variable, y= value)) +
+  geom_boxplot() +
+  geom_dotplot(binaxis='y', stackdir='center', col = "white", fill="darkred", stackratio=1, dotsize=1) + 
+  theme_bw() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), legend.position = "none") +
+  ylim(c(0,5)) +
+  ylab("cytosine modification density \n at work-hour sampling") + xlab("co-twin cohort")
+  # stat_summary(fun=median, geom="point", shape=18, size=3, color="black") + 
+  # stat_summary(fun.data="mean_sdl", fun.args = list(mult=1),geom="crossbar", shape=18, col="grey25", width=0.5)
+
+```
+
+### Statistical tests
+```{r}
+df1 <- sample_points %>%
+  dcast(rep ~ variable, value.var = "value", sum)
+
+tres <- t.test(df1$healthy, df1$affected, alternative="two.sided", var.equal=FALSE)
+bres <- bartlett.test(data = sample_points, value ~ variable)
+ares <- aov(data = sample_points, value ~ variable)
+summary(ares)[[1]][["Pr(>F)"]][1]
+tres$p.value
+bres$p.value
+
+```
+
+<!-- ### Sampling test with label -->
+<!-- ```{r fig.height= 4, fig.width=3} -->
+<!-- text_values <- paste("t-test p=", round(tpval, 2), -->
+<!--       "\nanova p=", round(apval, 2), -->
+<!--       "\nbartlett's p=", round(bpval, 2), sep="") -->
+
+<!-- sample_points %>% -->
+<!--   ggplot(aes(x=variable, y= value)) + -->
+<!--   geom_boxplot() + -->
+<!--   geom_dotplot(binaxis='y', stackdir='center', col = "white", fill="darkred", stackratio=1, dotsize=1) +  -->
+<!--   theme_bw() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), legend.position = "none") + -->
+<!--   ylab("cytosine modification density \n at work-hour sampling") + xlab("co-twin cohort") + -->
+<!--   ylim(c(0,5)) + -->
+<!--   annotate("text", x=Inf, y=Inf, label = text_values, vjust=1, hjust=1) -->
+
+<!-- ``` -->
+
+### Figure 5d: iterations of desynchronosis
+
+```{r}
+
+simulator <- function(iter){
+phase_shift = seq(0, 6, 0.5)
+sample_size = 50
+res_list2 <- vector('list', length(sample_size))
+
+for(j in 1:length(phase_shift)){
+
+res_list <- vector('list', sample_size)
+
+for(i in 1:length(res_list)){
+ tmp$hyp_amp <- 5
+  hypo_amp <- sample(seq(tmp$hyp_amp/2, tmp$hyp_amp, tmp$hyp_amp/10),1)
+  # hypo_amp <- tmp$hyp_amp 
+
+  tmp2 <- data.frame(rep=i, zt = 0:24, 
+                     healthy_cotwins = coef2wave(amp=hypo_amp, 
+                                                 acro=sample(c(seq(21, 24, 0.5), seq(0, 3, 0.5)), 1)), 
+                     affected_cotwins = coef2wave(amp=hypo_amp, 
+                                                  acro=sample(c(seq(21-phase_shift[j], 24, 0.5), seq(0, 3+phase_shift[j], 0.5)), 1))) 
+  res_list[[i]] <- tmp2
+  }
+
+res <- do.call(rbind, res_list)
+res <- res %>%
+  melt(., id.var = c("rep","zt")) %>%
+  mutate(value = value + abs(min(value)))
+
+sample_points <- res %>%
+  filter( zt > 9, zt < 17 ) %>%
+  dcast(rep + zt ~ variable, value.var = "value", sum) %>%
+  group_by(rep) %>%
+  sample_n(., 1) %>%
+  melt(., id.var = c("rep","zt")) 
+
+df1 <- sample_points %>%
+  dcast(rep ~ variable, value.var = "value", sum)
+
+tres <- t.test(df1$healthy_cotwins, df1$affected_cotwins, alternative="two.sided")
+bres <- bartlett.test(data = sample_points, value ~ variable)
+ares <- aov(data = sample_points, value ~ variable)
+res_list2[[j]] <- data.frame(phase_shift = phase_shift[j], 
+           healthy_mean = mean(df1$healthy_cotwins),
+           affected_mean = mean(df1$affected_cotwins),
+           healthy_sd = sd(df1$healthy_cotwins),
+           affected_sd = sd(df1$affected_cotwins),
+           pval_ttest = tres$p.value,
+           pval_anova = summary(ares)[[1]][["Pr(>F)"]][1],
+           pval_bartlett = bres$p.value)
+}
+
+return(data.frame(iter=iter, do.call(rbind, res_list2)))
+}
+
+simulation <- do.call(rbind, lapply(1:1000, function(x) simulator(x)))
+
+### Save output
+# saveRDS(simulation, "output/chrono_iterations.RDS")
+
+### Load published data
+simulation <- readRDS("input/chrono_iterations.RDS")
+
+```
+
+#### Figure 5d cont.. pie chart
+```{r fig.height= 4, fig.width=3}
+colorpalette = viridis::viridis(20)
+
+simulation %>%
+  select_if(., grepl("iter|phase_shift|pval", colnames(.))) %>%
+  mutate(legend = case_when(pval_bartlett < 0.05 & pval_ttest < 0.05 ~ "DMP & DVP",
+                         pval_bartlett < 0.05 ~ "DVP",
+                         pval_ttest < 0.05 ~ "DMP",
+                         pval_bartlett > 0.05 & pval_ttest > 0.05 ~ "no significance")) %>%
+  select(iter, phase_shift, legend) %>%
+  group_by(phase_shift) %>%
+  count(legend) %>%
+  ggplot(aes(x="", y=n, fill=legend)) +
+    geom_bar(stat = "identity", col="white", position = position_fill()) +
+  scale_fill_manual(values=c(colorpalette[1],colorpalette[18],colorpalette[10],"grey80")) +
+    coord_polar(theta = "y") +
+    facet_wrap(~ phase_shift, nrow=3) +
+  # xlim(c(2, 4)) +
+  theme_bw() + theme(panel.grid.major = element_blank(), axis.ticks = element_blank(), axis.text.x=element_blank(), panel.grid.minor = element_blank()) +
+   theme(axis.title.x = element_blank(),
+          axis.title.y = element_blank()) + 
+    theme(legend.position='bottom') +guides(fill=guide_legend(nrow=2,byrow=TRUE))
+
+```
+
+
+### Figure 5e: sampling time heterogeneity
+
+```{r fig.height= 3, fig.width=3}
+sample_points1 <- res %>%
+    filter(variable !="healthy") %>%
+  filter( zt >= 6, zt < 9 ) %>%
+  dcast(rep + zt ~ variable, value.var = "value", sum) %>%
+  group_by(rep) %>%
+  sample_n(., 1) %>%
+  melt(., id.var = c("rep","zt")) %>%
+  mutate(tmp ="early\nmorning")
+
+sample_points2 <- res %>%
+    filter(variable !="healthy") %>%
+  filter( zt >= 9, zt < 12 ) %>%
+  dcast(rep + zt ~ variable, value.var = "value", sum) %>%
+  group_by(rep) %>%
+  sample_n(., 1) %>%
+  melt(., id.var = c("rep","zt")) %>%
+  mutate(tmp ="morning")
+
+sample_points3 <- res %>%
+    filter(variable !="healthy") %>%
+  filter( zt >= 12, zt < 15 ) %>%
+  dcast(rep + zt ~ variable, value.var = "value", sum) %>%
+  group_by(rep) %>%
+  sample_n(., 1) %>%
+  melt(., id.var = c("rep","zt")) %>%
+  mutate(tmp ="early\nafternoon")
+
+sample_points4 <- res %>%
+    filter(variable !="healthy") %>%
+  filter( zt >= 15, zt < 18 ) %>%
+  dcast(rep + zt ~ variable, value.var = "value", sum) %>%
+  group_by(rep) %>%
+  sample_n(., 1) %>%
+  melt(., id.var = c("rep","zt")) %>%
+  mutate(tmp ="late\nafternoon")
+
+sample_points5 <- res %>%
+    filter(variable !="healthy") %>%
+  filter( zt >= 9, zt <= 17 ) %>%
+  dcast(rep + zt ~ variable, value.var = "value", sum) %>%
+  group_by(rep) %>%
+  sample_n(., 1) %>%
+  melt(., id.var = c("rep","zt")) %>%
+  mutate(tmp ="random\nduring work-hours")
+
+
+```
+
+#### Figure 5e cont.. waveforms
+```{r fig.height= 3, fig.width=5}
+
+sam_total <- rbind(sample_points1,sample_points2,sample_points3,sample_points4, sample_points5) 
+
+### Output data
+# saveRDS(sam_total, "output/sam_total.RDS")
+### Import published data
+sample_points <- readRDS("input/sam_total.RDS")
+
+
+colorpalette = viridis::viridis(20)
+
+res %>%
+  filter(variable !="healthy") %>%
+  ggplot(aes(x=zt, y=value, col=as.factor(rep))) +
+  theme_bw() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), legend.position = "none") +
+  ylab("normalized\ncytosine modification\ndensity (%)") + xlab("time of day") +
+  scale_x_continuous(breaks=seq(0,24, 4), labels = c("12AM","4AM","8AM","12PM","4PM","8PM","12AM")) +
+  # geom_rect(aes(xmin=9,xmax=17,ymin=-Inf,ymax=Inf), alpha=0.1, fill="grey90", col="white") +
+  # geom_line(method="lm", alpha=0.5, size=0.25, formula= y ~ sin(x/24*2*pi) + cos(x/24*2*pi), se=FALSE) +
+  geom_line(stat="smooth", method="lm", alpha=0.3, size=0.25, formula= y ~ sin(x/24*2*pi) + cos(x/24*2*pi), se=FALSE) +
+  # facet_wrap(~variable, nrow=2) + 
+  scale_color_manual(values=c(rep("black", length(res_list)))) +
+  geom_point(data= sample_points1, aes(x=zt, y=value), col=colorpalette[6], size=0.75,alpha=0.75) +
+  geom_point(data= sample_points2, aes(x=zt, y=value), col=colorpalette[10], size=0.75,alpha=0.75) +
+  geom_point(data= sample_points3, aes(x=zt, y=value), col=colorpalette[14], size=0.75,alpha=0.75) +
+  geom_point(data= sample_points4, aes(x=zt, y=value), col=colorpalette[18], size=0.75,alpha=0.75) +
+  geom_point(data= sample_points5, aes(x=zt, y=value), col="darkred", size=0.75, alpha=0.75)
+
+```
+### Figure 5f: boxplot
+
+```{r fig.height= 3, fig.width=5}
+
+sam_total %>%
+  mutate(tmp = factor(tmp, levels=c("early\nmorning","morning","early\nafternoon","late\nafternoon","random\nduring work-hours"))) %>%
+  ggplot(aes(x=tmp, y= value)) +
+  geom_boxplot() +
+  geom_dotplot(aes(fill=tmp),binaxis='y', stackdir='center', col = "white",stackratio=1, dotsize=1) + 
+  theme_bw() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), legend.position = "none") +
+  ylab("cytosine modification density \n at sampling") + xlab("sampling window") +
+  scale_fill_manual(values=c(colorpalette[6],colorpalette[10],colorpalette[14],colorpalette[18], "darkred")) +
+  ylim(c(0,7)) 
+
+```
+### Figure 5f: statistical tests
+```{r}
+
+df1 <- sam_total %>%
+  dcast(rep ~ tmp, value.var = "value", sum)
+
+bres <- bartlett.test(data = sam_total, value ~ tmp)
+ares <- aov(data = sam_total, value ~ tmp)
+summary(ares)[[1]][["Pr(>F)"]][1]
+# tres$p.value
+bres$p.value
+TukeyHSD(ares)
+
+```
+
+### Figure 5g: anti-phasic oscillations
+```{r fig.height= 3, fig.width=5}
+
+res_list <- vector('list', 50)
+phase_shift = 2
+
+for(i in 1:length(res_list)){
+  hypothetical_amplitude <- 5
+  hypo_amp <- sample(seq(hypothetical_amplitude/2, hypothetical_amplitude, hypothetical_amplitude/10),1)
+  tmp2 <- data.frame(rep=i, zt = 0:48, 
+                     control = coef2wave(amp=hypo_amp, int= 2.5, zts=0:48,
+                                                 acro=sample(c(seq(23, 24, 0.5), seq(1, 5, 0.5)), 1))
+                     # trough = coef2wave(amp=hypo_amp2, int= 2.5,
+                     #                             acro=sample(c(seq(21, 24, 0.5), seq(0, 3, 0.5)), 1)),
+                     # peak = coef2wave(amp=hypo_amp2, int= 2.5,
+                     #                             acro=sample(c(seq(21, 24, 0.5), seq(0, 3, 0.5)), 1))
+                     ) 
+  tmp2
+  tmp2$anti_phase <- c(tmp2$control[13:25], tmp2$control[1:12],tmp2$control[38:49], tmp2$control[26:37])
+# length(tmp2$control)
+  res_list[[i]] <- tmp2
+  }
+
+res <- do.call(rbind, res_list)
+
+res <- res %>%
+  melt(., id.var = c("rep","zt")) 
+
+graph1 <- res %>%
+  ggplot(aes(x=zt, y=value, fill=as.factor(rep), col=as.factor(variable))) +
+  theme_bw() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), legend.position = "none") +
+  ylab("normalized\ncytosine modification\ndensity (%)") + xlab("time of day") +
+  scale_x_continuous(breaks=seq(0,48, 6), labels = c("12AM","6AM", "12PM","6PM","12AM","6AM", "12PM","6PM", "12AM")) +
+  annotate("rect", xmin=12,xmax=18,ymin=-Inf,ymax=Inf, alpha=0.5, fill="grey75", col="white") +
+  annotate("rect", xmin=30,xmax=36,ymin=-Inf,ymax=Inf, alpha=0.5, fill=colorpalette[19], col="white") +
+  geom_smooth(method="lm", size=0.25, formula= y ~ sin(x/24*2*pi) + cos(x/24*2*pi), se=FALSE) +
+  # geom_hline(yintercept=2.5, col="red") +
+  # facet_wrap(~variable, nrow=1) +
+  scale_color_manual(values=c(colorpalette[6], colorpalette[15]))
+  # facet_wrap(~variable) + scale_color_manual(values=c(viridis::cividis(20))) 
+
+graph1
+
+### Save output
+# saveRDS(res, "output/antiphase.RDS")
+
+### Load published data
+res <- readRDS("input/antiphase.RDS")
+
+```
+
+### Figure 5g: sampling anti-phasic oscillations
+```{r fig.height= 3, fig.width=5}
+colorpalette = viridis::viridis(20)
+
+sample_points1 <- res %>%
+    filter(variable !="healthy_cotwins") %>%
+  filter( zt >= 12, zt <= 18 ) %>%
+  dcast(rep + zt ~ variable, value.var = "value", sum) %>%
+  group_by(rep) %>%
+  sample_n(., 1) %>%
+  melt(., id.var = c("rep","zt")) %>%
+  mutate(tmp ="afternoon")
+
+sample_points2 <- res %>%
+    filter(variable !="healthy_cotwins") %>%
+  filter( zt >= 30, zt < 36 ) %>%
+  dcast(rep + zt ~ variable, value.var = "value", sum) %>%
+  group_by(rep) %>%
+  sample_n(., 1) %>%
+  melt(., id.var = c("rep","zt")) %>%
+  mutate(tmp ="morning")
+
+graph1 +
+  geom_point(data= sample_points1, aes(x=zt, y=value, col=variable), size=0.5, alpha=0.75) +
+  geom_point(data= sample_points2, aes(x=zt, y=value, col=variable), size=0.5, alpha=0.75) +
+  ylim(-1, 6)
+
+```
+
+### Figure 5g: sampled anti-phasic oscillations
+```{r fig.height= 3, fig.width=3.5}
+
+rbind(sample_points1, sample_points2) %>%
+  mutate(tmp = factor(tmp, levels=c("afternoon","morning"))) %>%
+  ggplot(aes(x=variable, y= value)) +
+  geom_boxplot() +
+  geom_dotplot(aes(fill=variable),binaxis='y', stackdir='center', col = "white",stackratio=1, dotsize=1) + 
+  theme_bw() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), legend.position = "none") +
+  ylab("cytosine modification \n at work-hour sampling") + xlab("time of sampling") +
+  facet_wrap(~tmp) +
+  scale_fill_manual(values=c(colorpalette[6], colorpalette[15])) 
+
+```
+
+
