@@ -1,5 +1,5 @@
 ---
-title: "Untitled"
+title: "chronoepigenetic oscillations"
 output: html_document
 ---
 
@@ -140,8 +140,8 @@ for(j in 1:length(phase_shift)){
 res_list <- vector('list', sample_size)
 
 for(i in 1:length(res_list)){
- tmp$hyp_amp <- 5
-  hypo_amp <- sample(seq(tmp$hyp_amp/2, tmp$hyp_amp, tmp$hyp_amp/10),1)
+  hypothetical_amplitude <- 5
+  hypo_amp <- sample(seq(hypothetical_amplitude/2, hypothetical_amplitude, hypothetical_amplitude/10),1)
   # hypo_amp <- tmp$hyp_amp 
 
   tmp2 <- data.frame(rep=i, zt = 0:24, 
