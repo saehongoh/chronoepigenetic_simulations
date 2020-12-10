@@ -4,7 +4,9 @@ output: html_document
 ---
 
 ## Setup
+
 ```{r}
+
 require(ggplot2)
 require(dplyr)
 require(data.table)
