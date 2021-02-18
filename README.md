@@ -1,5 +1,4 @@
-# chronoepigenetic_simulations
-# simulations of epigenetic oscillations
+# R codes for simulating of chronoepigenetic oscillations
 
 "Chronoepigenetic_simulations.Rmd" file contains codes to generate Figure 5. 
 - Running this file without reading in any ".RDS" from input will generate a new set of oscillations.
