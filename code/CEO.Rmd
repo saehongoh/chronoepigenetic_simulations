@@ -1,0 +1,146 @@
+---
+title: "CEO"
+output: html_document
+---
+
+````{r setup, include=FALSE}
+library("GEOquery")
+require(dplyr)
+require(data.table)
+require(tidyr)
+require(ggplot2)
+gse=getGEO(filename="~/Downloads/GSE87197_series_matrix.txt")
+test <- gse@phenoData
+dat <- data.frame(test@data) %>%
+  filter(grepl("WGBS", extract_protocol_ch1))
+
+dat2 <- dat %>%
+  filter(grepl("1000", characteristics_ch1.5))
+
+path="~/Downloads/GSE87197_RAW/"
+newpath = "~/Downloads/GSE87197_RAW/sorted/"
+i=1
+
+filenames <- list.files(path)
+key <- dat2 %>%
+  mutate(key = rownames(dat2)) %>%
+  select(key, title, cell.type.ch1,donor.number.ch1,Sex.ch1,description)
+
+rownames(key) <- NULL
+
+key <- key  %>%
+  mutate(groups = case_when(grepl("stem", description) ~"stem cells",
+                            grepl("progenitor", description) ~ "progenitors",
+                            TRUE ~ "differentiated"))
+```
+
+
+```{r}
+
+permethlist <- vector('list', nrow(dat2))
+depthlist <- vector('list', nrow(dat2))
+i=1
+for(i in 1:nrow(dat2)){
+  print(i)
+  predat <- fread(paste0(newpath,dat2$geo_accession[i],"_",dat2$title[i],".txt")) 
+  predat <- predat %>%
+    filter(V4 >=10) %>%
+    mutate(modid = paste0(V1,":",V2))
+  
+  depth <- predat %>%
+    select(modid, V4)
+  
+  permeth <- predat %>%
+    mutate(permeth = V3/V4) %>%
+    select(modid, permeth)
+  
+  colnames(depth)[2] <- rownames(dat2)[i]
+  colnames(permeth)[2] <- rownames(dat2)[i]
+    
+  permethlist[[i]] <- permeth
+  depthlist[[i]] <- depth
+
+}
+
+permeth <- Reduce(function(x, y) merge(x, y, all=T, by=c("modid")), permethlist, accumulate=F)
+df <- permeth[complete.cases(permeth),]
+```
+
+```{r}
+which(duplicated(key$title))
+which(duplicated(colnames(df)))
+df <- df %>%
+  melt(.) %>%
+  # separate(variable, c("celltype","count","donor","rep"), remove=F) %>%
+  rename(key = variable) %>%
+  left_join(.,key, by="key") 
+  
+df %>%
+  ggplot(aes(x=value, col=groups)) +
+  geom_density() + 
+  # facet_wrap(~groups, ncol=1) +
+  theme_bw()
+
+df %>%
+  ggplot(aes(x=value, col=cell.type.ch1)) +
+  geom_density() + 
+  # facet_wrap(~groups, ncol=1) +
+  theme_bw()
+
+unique(tmp$description)
+```
+
+```{r}
+key %>%
+  group_by(cell.type.ch1, groups) %>%
+  summarise(n=n())
+
+lmp <- function (modelobject) {
+    if (class(modelobject) != "lm") stop("Not an object of class 'lm' ")
+    f <- summary(modelobject)$fstatistic
+    p <- pf(f[1],f[2],f[3],lower.tail=F)
+    attributes(p) <- NULL
+    return(p)
+}
+
+modid_list <- unique(df$modid)
+
+dfm <- df %>%
+  # filter(modid == modid_list[1]) %>%
+  group_by(modid, groups, cell.type.ch1, description) %>%
+  summarise(mean = mean(value), sd = sd(value))
+
+res_list <- vector('list', length(modid_list))
+
+for(i in 1:length(modid_list)){
+  test_frame <- dfm %>%
+  filter(modid == modid_list[i])
+  res <- lm(test_frame$mean ~ test_frame$groups)
+  res_list[[i]] <- data.frame(modid=unique(test_frame$modid), pvalue=lmp(res)) 
+}
+
+lm_res <- do.call(rbind, res_list) %>%
+  mutate(fdr = p.adjust(pvalue, "fdr"))
+
+lm_res %>%
+  ggplot(aes(x=pvalue, fill=fdr<0.05)) +
+  geom_histogram(breaks=seq(0,1,0.05)) +
+  theme_bw()
+
+```
+```{r}
+
+lm_res[lm_res$pvalue <0.05,]$modid
+df %>%
+  filter(modid %in% lm_res[lm_res$pvalue <0.05,]$modid) %>%
+  ggplot(aes(x=value, col=groups)) +
+  geom_density() + 
+  # facet_wrap(~groups, ncol=1) +
+  theme_bw()
+```
+
+
+```{r}
+
+
+```

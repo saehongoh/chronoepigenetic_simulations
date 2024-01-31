@@ -1,0 +1,217 @@
+---
+title: "intraindividual"
+output: html_document
+---
+
+````{r}
+require(dplyr)
+require(ggplot2)
+library(mathart)
+```
+
+```{r}
+
+distributions <- function(howmany, sd_d, peak_divide) {
+  # howmany = seq(1, 100, by =1)
+  mean = mean(howmany)
+  sd = 10
+  res <- data.frame(x=howmany, y= dnorm(howmany, mean, sd)) %>%
+    mutate(xend = x) %>%
+    mutate(y = y/peak_divide) %>%
+    mutate(yend = -y)
+  
+  deviations <- seq(max(abs(res$y))*.05, max(abs(res$y))*.50, max(abs(res$y))*.01)
+  deviations <- sapply(1:nrow(res), function(x) sample(deviations, 1))
+
+  res$y <- res$y + deviations
+  res$yend <- res$yend - deviations
+  
+  # signs <- c(-1,+1)
+  # res$devs <- sapply(1:nrow(res), function(x) sample(deviations, 1)*sample(signs, 1))
+  return(res)
+}
+
+```
+
+```{r fig.height=4, fig.width=10}
+peak1 <- distributions(seq(1, 100, by =1) , 15, 1.5)
+peak2 <- distributions(seq(25, 120, by =1) , 7, 2)
+peak3 <- distributions(seq(100, 175, by =1) , 7, 2)
+peak5 <- distributions(seq(175, 250, by =1) , 9, 3)
+peak4 <- distributions(seq(250, 300, by =1) , 7, 2)
+peak6 <- distributions(seq(300, 350, by =1) , 7, 2)
+peak7 <- distributions(seq(350, 400, by =1) , 25, 2.2)
+peak8 <- distributions(seq(400, 450, by =1) , 14, 1.25)
+peak9 <- distributions(seq(450, 500, by =1) , 5, 6)
+noise_full <- distributions(seq(1, 500, by =1) , 7, 6)
+
+grp1 <- rbind(peak1, peak2, peak5, peak7, peak8, peak9, noise_full) %>% mutate(grp = "grp1")
+grp2 <- rbind(peak1, peak2, peak3, peak4, peak6, peak8, peak9, noise_full)  %>% mutate(grp = "grp2")
+grp3 <- rbind(peak1, peak2, peak5, peak7, peak8, peak9, noise_full) %>% mutate(grp = "grp3")
+grp4 <- rbind(peak1, peak2, peak4, peak6, peak7, peak8, peak9, noise_full) %>% mutate(grp = "grp4")
+grp5 <- rbind(peak1, peak2, peak3, peak6, peak7, peak8, peak9, noise_full) %>% mutate(grp = "grp5")
+grp6 <- rbind(peak1, peak2, peak4, peak5, peak6, peak9, noise_full)  %>% mutate(grp = "grp6")
+grp7 <- rbind(peak1, peak2, peak3, peak5, peak6, peak8, peak9, noise_full)  %>% mutate(grp = "grp7")
+grp8 <- rbind(peak1, peak2, peak7, peak8, peak9, noise_full)  %>% mutate(grp = "grp8")
+
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
+
+```
+
+```{r fig.height=4, fig.width=6}
+grp <- rbind(grp1, grp2, grp3, grp4, grp5, grp6, grp7, grp8) %>%
+  group_by(grp, x, xend) %>%
+  summarise(y = sign(y)*max(abs(y)), yend = sign(yend)*max(abs(yend)), .groups="drop") %>%
+  distinct(.)
+
+res <- do.call(rbind, lapply(1:nrow(grp), function(x) data.frame(grp[x,], ind = seq(grp[x,]$yend, grp[x,]$y, (grp[x,]$y - grp[x,]$yend)/5))))
+is.even <- function(x) x %% 2 == 0
+res %>%
+  filter(is.even(x)) %>%
+  mutate(ind=case_when(grp == "grp1"~ind+0.12*7,
+                       grp == "grp2"~ind+0.12*6,
+                       grp == "grp3"~ind+0.12*5,
+                       grp == "grp4"~ind+0.12*4,
+                       grp == "grp5"~ind+0.12*3,
+                       grp == "grp6"~ind+0.12*2,
+                       grp == "grp7"~ind+0.12*1,
+                       grp == "grp8"~ind+0)) %>%
+  group_by(grp) %>%
+  mutate(color_ind = ind - mean(ind)) %>%
+  ungroup() %>%
+  ggplot() +
+  geom_line(aes(x=x, y=ind, col=x, group=grp), color="grey50", size=0.1) +
+  geom_point(aes(x=x, y=ind, group=ind, col=color_ind), size=0.01) +
+  scale_color_gradientn(colours=gray.colors(length(unique(grp1$x)))) +
+  theme_blankcanvas(bg_col = "#ffffff", margin_cm = 0)
+```
+
+```{r fig.height=4, fig.width=10}
+coef2wave <- function(amp,acro,int=0,zts=0:24,per=24){return(amp/2*cos(zts/24*2*pi-acro/24*2*pi)+int)}
+require(mathart)
+zts=seq(0,24,0.1)
+
+amp = seq(1,15,1); acro = seq(3,21,1); period = seq(4,20,1)
+dat <- do.call(rbind, lapply(1:2, function(x) data.frame(t=x, x=zts, y= coef2wave(amp=sample(amp,1),
+                                                                        acro=sample(acro,1),
+                                                                        per=sample(period,1),
+                                                                        zts=zts)))) %>%
+  k_nearest_neighbour_graph(40)
+
+# amp = seq(2,4,1); acro = seq(12,16,1); period = seq(5,15,1)
+dat2 <- do.call(rbind, lapply(1:2, function(x) data.frame(t=x, x=zts, y= coef2wave(amp=sample(amp,1),
+                                                                        acro=sample(acro,1),
+                                                                        per=sample(period,1),
+                                                                        zts=zts)))) %>%
+  k_nearest_neighbour_graph(40)
+
+# amp = seq(7,9,1); acro = seq(2,4,1); period = seq(3,7,1)
+dat3 <- do.call(rbind, lapply(1:2, function(x) data.frame(t=x, x=zts, y= coef2wave(amp=sample(amp,1),
+                                                                        acro=sample(acro,1),
+                                                                        per=sample(period,1),
+                                                                        zts=zts)))) %>%
+  k_nearest_neighbour_graph(40)
+
+# amp = seq(8,10,1); acro = seq(14,20,1); period = seq(20,24,1)
+dat4 <- do.call(rbind, lapply(1:2, function(x) data.frame(t=x, x=zts, y= coef2wave(amp=sample(amp,1),
+                                                                        acro=sample(acro,1),
+                                                                        per=sample(period,1),
+                                                                        zts=zts)))) %>%
+  k_nearest_neighbour_graph(40)
+
+# amp = seq(1,2,1); acro = seq(3,10,1); period = seq(20,30,1)
+dat5 <- do.call(rbind, lapply(1:2, function(x) data.frame(t=x, x=zts, y= coef2wave(amp=sample(amp,1),
+                                                                        acro=sample(acro,1),
+                                                                        per=sample(period,1),
+                                                                        zts=zts)))) %>%
+  k_nearest_neighbour_graph(40)
+
+# amp = seq(5,10,1); acro = seq(2,6,1); period = seq(4,10,1)
+dat6 <- do.call(rbind, lapply(1:2, function(x) data.frame(t=x, x=zts, y= coef2wave(amp=sample(amp,1),
+                                                                        acro=sample(acro,1),
+                                                                        per=sample(period,1),
+                                                                        zts=zts)))) %>%
+  k_nearest_neighbour_graph(40)
+
+# amp = seq(2,4,1); acro = seq(12,16,1); period = seq(5,15,1)
+dat7 <- do.call(rbind, lapply(1:2, function(x) data.frame(t=x, x=zts, y= coef2wave(amp=sample(amp,1),
+                                                                        acro=sample(acro,1),
+                                                                        per=sample(period,1),
+                                                                        zts=zts)))) %>%
+  k_nearest_neighbour_graph(40)
+
+
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
+# rbind(dat) %>%
+ggplot() +
+  geom_segment(aes(x=x, y=y, xend = xend, yend = yend), dat, color = gg_color_hue(7)[1],size = 0.03, alpha=0.4) +
+  geom_segment(aes(x=x, y=y, xend = xend, yend = yend), dat2, color = gg_color_hue(7)[2],size = 0.03, alpha=0.4) +
+  geom_segment(aes(x=x, y=y, xend = xend, yend = yend), dat3, color = gg_color_hue(7)[3],size = 0.03, alpha=0.4) +
+  geom_segment(aes(x=x, y=y, xend = xend, yend = yend), dat4, color = gg_color_hue(7)[4],size = 0.03, alpha=0.4) +
+  geom_segment(aes(x=x, y=y, xend = xend, yend = yend), dat5, color = gg_color_hue(7)[5],size = 0.03, alpha=0.4) +
+  geom_segment(aes(x=x, y=y, xend = xend, yend = yend), dat6, color = gg_color_hue(7)[6],size = 0.03, alpha=0.4) +
+  geom_segment(aes(x=x, y=y, xend = xend, yend = yend), dat7, color = gg_color_hue(7)[7],size = 0.03, alpha=0.4) +
+  ylim(-10,10) +
+  theme_blankcanvas(bg_col = "#ffffff", margin_cm = 0)
+
+
+```
+
+````{r}
+harmonograph <- function(n = 1000000,
+                         A1 = 1, A2 = 1, A3 = 1, A4 = 1,
+                         d1 = 0.039, d2 = 0.006, d3 = 0, d4 = 0.0045,
+                         f1 = 10, f2 = 3, f3 = 1, f4 = 2,
+                         p1 = 0, p2 = 0, p3 = pi/2, p4 = 0) {
+  data.frame(t = seq(0, 200*pi, 200*pi/n)) %>%
+    dplyr::mutate(
+      x = A1*sin(t*f1+p1)*exp(-d1*t) + A2*sin(t*f2+p2)*exp(-d2*t),
+      y = A3*sin(t*f3+p3)*exp(-d3*t) + A4*sin(t*f4+p4)*exp(-d4*t)
+    ) %>%
+    dplyr::select(-t)
+}
+
+# set.seed(2)
+df <- lissajous(a = runif(1, 0, 2), b = runif(1, 0, 2), A = runif(1, 0, 2), B = runif(1, 0, 2), d = 200) %>%
+  sample_n(1001) %>%
+  k_nearest_neighbour_graph(40)
+
+set.seed(5)
+df <- lissajous(a = runif(1, 0, 2), b = runif(1, 0, 2), A = runif(1, 0, 2), B = runif(1, 0, 2), d = 200) %>%
+  sample_n(1001) %>%
+  k_nearest_neighbour_graph(40)
+
+ggplot() +
+  geom_segment(aes(x=y, y=x, xend = yend, yend = xend, col=x), df, size = 0.03) +
+  coord_equal() +
+  scale_color_viridis_c() + 
+  # scale_color_gradientn(colours=gg_color_hue(length(unique(dat$y)))) +
+  theme_blankcanvas(margin_cm = 0)
+
+# ggsave("knn_lissajous_002.png", p, width = 25, height = 25, units = "cm")
+
+```
+```{r fig.height=5, fig.width=5}
+df <- lorenz_attractor(a=20, b=12/3, c=28, n=1000000)
+
+ggplot() +
+  geom_path(aes(x, z, col=x*y*z), df, alpha = 0.15, size = 0.03) +
+  scale_color_viridis_c(direction=-1, begin=.25, end=1) + 
+  xlim(-25, 25) + ylim(2.5, 52.5)  +
+  theme_blankcanvas(bg_col = "#1c1c1d", margin_cm = 0)
+
+```
+
+
+```{r}
+
+
+```
+
+
